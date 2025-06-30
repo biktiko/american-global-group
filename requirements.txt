@@ -1,0 +1,6 @@
+python-dotenv
+gspread
+google-auth
+python-telegram-bot==20.3
+aiohttp
+psycopg2-binary
