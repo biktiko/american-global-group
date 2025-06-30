@@ -14,9 +14,82 @@ import logging
 import os
 from dotenv import load_dotenv
 import sqlite3
+import psycopg2
+from urllib.parse import urlparse
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()
+
+# 1) Загрузка env
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    logging.error("DATABASE_URL не задан!")
+    exit(1)
+
+# 2) Распарсить URL
+result = urlparse(DATABASE_URL)
+
+# 3) Подключиться к Postgres
+conn = psycopg2.connect(
+    dbname=result.path.lstrip("/"),
+    user=result.username,
+    password=result.password,
+    host=result.hostname,
+    port=result.port,
+    sslmode="require"
+)
+conn.autocommit = True
+cur = conn.cursor()
+
+# 4) Создать нужные таблицы, если их нет
+cur.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    user_id      BIGINT      PRIMARY KEY,
+    username     TEXT,
+    first_name   TEXT,
+    last_name    TEXT,
+    phone_number VARCHAR(20),
+    language     VARCHAR(2)  NOT NULL DEFAULT 'hy',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+""")
+# cur.execute("""
+# CREATE TABLE IF NOT EXISTS user_actions (
+#     action_id   BIGSERIAL   PRIMARY KEY,
+#     user_id     BIGINT      NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+#     action_type TEXT        NOT NULL,
+#     action_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+#     payload     JSONB
+# );
+# """)
+
+def save_user_db(user, phone=None):
+    """
+    Сохраняет или обновляет запись о пользователе.
+    Если запись уже есть — обновляет username/имя/фамилию/телефон и last_seen_at.
+    """
+    cur.execute("""
+        INSERT INTO users (
+            user_id, username, first_name, last_name, phone_number, last_seen_at
+        ) VALUES (
+            %s, %s, %s, %s, %s, NOW()
+        )
+        ON CONFLICT (user_id) DO UPDATE SET
+            username     = EXCLUDED.username,
+            first_name   = EXCLUDED.first_name,
+            last_name    = EXCLUDED.last_name,
+            phone_number = COALESCE(EXCLUDED.phone_number, users.phone_number),
+            last_seen_at = NOW();
+    """, (
+        user.id,
+        user.username,
+        user.first_name,
+        user.last_name,
+        phone
+    ))
+    conn.commit()
 
 # Настройка логирования
 logging.basicConfig(
@@ -186,11 +259,13 @@ async def handle_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # Функция обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.message.from_user.id
-    lang = user_languages.get(user_id, "hy")
+    user = update.effective_user
+    # Сохраняем пользователя (номер ещё неизвестен — передаём None)
+    save_user_db(user)
+    # user = update.message.from_user.id
+    lang = user_languages.get(user, "hy")
     
     # Сохранение пользователя
-    add_user(user_id)
     
     keyboard = [
         [InlineKeyboardButton("Air Shipments from Armenia to the USA" if lang == "en" else "Օդային առաքում Հայաստանից ԱՄՆ", callback_data="Air AM to USA")],
