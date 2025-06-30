@@ -1,6 +1,6 @@
 import gspread
 from google.oauth2.service_account import Credentials
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import sqlite3
 import psycopg2
 from urllib.parse import urlparse
+from messages_file import MESSAGES
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()
@@ -135,78 +136,6 @@ files = {
 # Хранение данных пользователей
 user_choices = {}
 user_languages = {}
-
-# Сообщения на двух языках
-MESSAGES = {
-    "start": {
-        "hy": "Բարի գալուստ Ամերիքան Գլոբալ Գրուփի առաքանիների ընթացքին հետևելու բոտ։\n\nԸնդամենը մուտքագրելով առաքանիների անհատական կոդը (waybill number)՝ կարող եք տեսնել կարգավիճակը",
-        "en": "Welcome to the American Global Group Package Tracking Bot!\n\nSimply enter your package’s waybill number to check its status."
-    },
-    "choose_route": {
-        "hy": "Ընտրեք ուղղությունը։",
-        "en": "Select a shipping route."
-    },
-    "where_to_find": {
-        "Air AM to USA": {
-            "hy": "Գործարքի ստացականի վերին ձախ անկյունում կգտնեք 11 նիշանոց նույնականացման համար։",
-            "en": "Check the top-left corner of your receipt for an 11-digit identification number."
-        },
-        "Air USA to AM": {
-            "hy": "Գործարքի ստացականի վերին աջ անկյունում կգտնեք 12 նիշանոց նույնականացման համար։",
-            "en": "Check the top-right corner of your receipt for a 12-digit identification number."
-        },
-        "Ocean USA to AM": {
-            "hy": "Գործարքի ստացականի վերին աջ անկյունում կգտնեք 12 նիշանոց նույնականացման համար։",
-            "en": "Check the top-right corner of your receipt for a 12-digit identification number."
-        },
-    },
-    "not_found": {
-        "Air AM to USA": {
-            "hy": "Հարգելի՛ hաճախորդ, խնդրում ենք համոզվել, որ մուտքագրել եք ծանրոցի ճիշտ համարը։ \n\n Եթե վստահ եք, որ ծանրոցը ուղարկվել է, և չեք կարողանում հետևել բեռին, խնդրում ենք կապվել մեր հաճախորդների սպասարկման բաժնի հետ։",
-            "en": "No package with the provided information was found. \n\n Please ensure you have entered the correct code. \n\n If you are sure that the package has been shipped but cannot track it, please contact our customer service team for assistance."
-        },
-        "Air USA to AM": {
-            "hy": "Հարգելի՛ hաճախորդ, խնդրում ենք համոզվել, որ մուտքագրել եք ծանրոցի ճիշտ համարը։ Հիշեցում՝ ծանրոցի կարգավիճակը հասանելի կլինի հետևելու համար, եթե այն արդեն ուղարկվել է պահեստից մոտակա թռիչքով կամ կոնտեյներային բարձումով։ \n\n Եթե վստահ եք, որ ծանրոցը ուղարկվել է, և չեք կարողանում հետևել բեռին, խնդրում ենք կապվել մեր հաճախորդների սպասարկման բաժնի հետ։",
-            "en": "Dear customer, please ensure you have entered the correct waybill number. \n\n Package tracking will be available only if the package has been shipped from the warehouse by the next available flight or container loading. \n\n If you are sure that the package has been shipped but cannot track it, please contact our customer service team for assistance."
-        },
-        "Ocean USA to AM": {
-            "hy": "Հարգելի՛ hաճախորդ, խնդրում ենք համոզվել, որ մուտքագրել եք ծանրոցի ճիշտ համարը։ Հիշեցում՝ ծանրոցի կարգավիճակը հասանելի կլինի հետևելու համար, եթե այն արդեն ուղարկվել է պահեստից մոտակա թռիչքով կամ կոնտեյներային բարձումով։ \n\n Եթե վստահ եք, որ ծանրոցը ուղարկվել է, և չեք կարողանում հետևել բեռին, խնդրում ենք կապվել մեր հաճախորդների սպասարկման բաժնի հետ։",
-            "en": "Dear customer, please ensure you have entered the correct waybill number. \n\n Package tracking will be available only if the package has been shipped from the warehouse by the next available flight or container loading. \n\n If you are sure that the package has been shipped but cannot track it, please contact our customer service team for assistance."
-        }
-    },
-    "social_links": {
-        "hy": "",
-        "en": ""
-    },
-    "language_prompt": {
-        "hy": "Ընտրեք լեզուն / Choose your language:",
-        "en": "Select your language:"
-    },
-    "language_set": {
-        "hy": "Լեզուն ընտրված է հայերեն:",
-        "en": "Language set to English."
-    },
-    "error": {
-        "hy": "Ինչ-որ սխալ տեղի ունեցավ:",
-        "en": "An error occurred:"
-    },
-    "select_waybill_first": {
-        "hy": "Խնդրում ենք նախ ընտրել ուղղությունը։",
-        "en": "Please select a direction first."
-    },
-    "route_not_active": {
-        "hy": "Տվյալ ուղղությունը դեռևս ակտիվ չէ։",
-        "en": "This route is not active yet."
-    },
-    "missing_waybill_column": {
-        "hy": "Սխալ: 'waybill' սյունը բացակայում է աղյուսակում։",
-        "en": "Error: 'waybill' column is missing in the table."
-    },
-    "enter_waybill": {
-        "hy": "Մուտքագրեք ծանրոցի անհատական կոդը ամբողջությամբ, ինչպես գրված է հաստատող փաստաթղթի վրա։ Օրինակ՝ ",
-        "en": "Enter your package’s waybill number exactly as written on the receipt. Example: "
-    },
-}
 
 # Функция для безопасного доступа к ячейкам
 def get_cell(row, index):
@@ -591,9 +520,41 @@ async def set_bot_commands(application):
     commands = [
         BotCommand("start", "Start the bot"),
         BotCommand("setlanguage", "Change the language"),
-        BotCommand("broadcast", "Broadcast a message to all users")  # Добавлена команда broadcast
+        BotCommand("broadcast", "Broadcast a message to all users"),
+        BotCommand("sharecontact", "Share your phone number")
     ]
     await application.bot.set_my_commands(commands)
+
+async def share_contact_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+    user_id = update.message.from_user.id
+    lang = user_languages.get(user_id, "hy")
+
+    kb = [
+        [ KeyboardButton(MESSAGES['share'][lang], request_contact=True) ]
+    ]
+
+    reply_markup = ReplyKeyboardMarkup(
+        kb,
+        one_time_keyboard=True,
+        resize_keyboard=True
+    )
+   
+    await update.message.reply_text(
+        MESSAGES['share_phone'][lang],
+        reply_markup=reply_markup
+    )
+
+async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    contact = update.message.contact
+    user = update.effective_user
+    save_user_db(user, phone=contact.phone_number)
+    # удаляем custom-клавиатуру и возвращаем commands-menu
+    await update.message.reply_text(
+        "Спасибо! Номер сохранён.",
+        reply_markup=ReplyKeyboardRemove()
+    )
+
 
 # Обработка ввода waybill пользователем
 async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -727,12 +688,15 @@ if __name__ == "__main__":
     # Установка обработчиков
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("setlanguage", set_language))
+    application.add_handler(CommandHandler("sharecontact", share_contact_request))
+    application.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_waybill))
     application.add_handler(CallbackQueryHandler(handle_set_language, pattern="^set_lang_"))
     application.add_handler(CallbackQueryHandler(handle_direction, pattern="^(Air AM to USA|Air USA to AM|Ocean USA to AM)$"))
     application.add_handler(CallbackQueryHandler(handle_where_to_find, pattern="^where_to_find$"))
-    application.add_handler(CallbackQueryHandler(handle_change_direction, pattern="^change_direction$"))  # Добавлен обработчик change_direction
+    application.add_handler(CallbackQueryHandler(handle_change_direction, pattern="^change_direction$"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_waybill))
-    application.add_handler(CommandHandler("broadcast", broadcast_handler))  # Добавлен обработчик команды broadcast
+    application.add_handler(CommandHandler("broadcast", broadcast_handler))  
 
     # Установка команд
     loop = asyncio.new_event_loop()
