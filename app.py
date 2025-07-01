@@ -264,28 +264,7 @@ async def handle_change_direction(update: Update, context: ContextTypes.DEFAULT_
 def extract_data(route, row, lang):
     response = ""
     try:
-        # Определение переводов статусов для каждого маршрута
-        parcel_status_translations = {
-            "Air AM to USA": {
-                "ՀՀ գրասենյակում": "In the Armenian Office",
-                "ՀՀ մաքսային ձևակերպում": "In the Armenian Customs Office",
-                "Ուղարկված ՀՀ-ից": "Sent from Armenia",
-                "ԱՄՆ մաքսային մարմին": "In the American Customs Office",
-                "ԱՄՆ գրասենյակում": "In the American Office"
-            },
-            "Air USA to AM": {
-                "Ուղարկված ԱՄՆ-իցն": "Sent from the USA",
-                "ՀՀ գրասենյակում": "In the Armenian Office",
-                "Կանգնեցված ՀՀ մաքսայինի կողմից": "Held by the Armenian Customs Service",
-                "ՀՀ մաքսային տերմինալ": "In the Armenian Customs Office"
-            },
-            "Ocean USA to AM": {
-                "Ուղարկված ԱՄՆ-ից": "Sent from the USA",
-                "ՀՀ գրասենյակում": "In the Armenian Office",
-                "Կանգնեցված ՀՀ մաքսայինի կողմից": "Held by the Armenian Customs Service",
-                "ՀՀ մաքսային տերմինալ": "In the Armenian Customs Office"
-            }
-        }
+        parcel_status_translations = MESSAGES["parcel_status_translations"]
 
         if route == "Air AM to USA":
             # Column indices (0-based): B=1, C=2, V=21, Z=25, Y=24, AA=26, AB=27
@@ -293,11 +272,11 @@ def extract_data(route, row, lang):
             home_delivery_value = get_cell(row, 21)
             try:
                 if int(home_delivery_value) > 0:
-                    home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                    home_delivery = MESSAGES["home_delivery_ordered"][lang]
                 else:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
             except ValueError:
-                home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"  # По умолчанию
+                home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
 
             parcel_status = get_cell(row, 25)
             estimated_delivery = get_cell(row, 24)
@@ -309,26 +288,16 @@ def extract_data(route, row, lang):
             parcel_status_en = parcel_status_translations[route].get(parcel_status, parcel_status)
 
             # Отображение даты заказа
-            if lang == "hy":
-                response += f"Գործարքի ամսաթիվ: {order_date}\n"
-                response += f"{home_delivery}\n"
-            else:
-                response += f"Order Date: {order_date}\n"
-                response += f"{home_delivery}\n"
+            response += f"{MESSAGES['order_date'][lang]}: {order_date}\n"
+            response += f"{home_delivery}\n"
 
             # Проверка столбца AA
             if aa in ['true', 'yes', '1', '✓']:
-                if lang == "hy":
-                    response += f"Ստացված է հաճախորդի կողմից: {ab}\n" if ab else "Ստացված է հաճախորդի կողմից:\n"
-                else:
-                    response += f"Received by the Customer: {ab}\n" if ab else "Received by the Customer:\n"
+                response += f"{MESSAGES['received_by_customer'][lang]}: {ab}\n" if ab else f"{MESSAGES['received_by_customer'][lang]}:\n"
             else:
-                if lang == "hy":
-                    response += f"Առաքման կարգավիճակ:{parcel_status}\n"
-                    response += f"Ժամանման նախատեսվող ամսաթիվ դեպի ԱՄՆ գրասենյակ: {estimated_delivery}\n"
-                else:
-                    response += f"Parcel Status: {parcel_status_en}\n"
-                    response += f"Estimated Delivery Date to the American Office:{estimated_delivery}\n"
+                status = parcel_status if lang == "hy" else parcel_status_en
+                response += f"{MESSAGES['parcel_status'][lang]}: {status}\n"
+                response += f"{MESSAGES['estimated_delivery_date_usa_office'][lang]}: {estimated_delivery}\n"
             
             if len(ac)>0:
                 response += f"\n{ac}\n"
@@ -339,17 +308,17 @@ def extract_data(route, row, lang):
             home_delivery_value = get_cell(row, 17)
             try:
                 if int(home_delivery_value) > 0:
-                    home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                    home_delivery = MESSAGES["home_delivery_ordered"][lang]
                 else:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
             except ValueError:
                 try:
                     if home_delivery_value.upper() == "YES":
-                        home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                        home_delivery = MESSAGES["home_delivery_ordered"][lang]
                     else:
-                        home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                        home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
                 except Exception as e:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
 
 
             parcel_status = get_cell(row, 21)
@@ -361,26 +330,16 @@ def extract_data(route, row, lang):
             parcel_status_en = parcel_status_translations[route].get(parcel_status, parcel_status)
 
             # Отображение даты заказа
-            if lang == "hy":
-                response += f"Գործարքի ամսաթիվ:{order_date}\n"
-                response += f"{home_delivery}\n"
-            else:
-                response += f"Order Date: {order_date}\n"
-                response += f"{home_delivery}\n"
+            response += f"{MESSAGES['order_date'][lang]}: {order_date}\n"
+            response += f"{home_delivery}\n"
 
             # Проверка столбца X
             if x in ["yes", "true", "1", "✓"]:
-                if lang == "hy":
-                    response += f"Ստացված է հաճախորդի կողմից:\n"
-                else:
-                    response += f"Received by the Customer:\n"
+                response += f"{MESSAGES['received_by_customer'][lang]}:\n"
             else:
-                if lang == "hy":
-                    response += f"Առաքման կարգավիճակ: {parcel_status}\n"
-                    response += f"Ժամանման նախատեսվող ամսաթիվ դեպի Երևանյան գրասենյակ: {estimated_delivery}\n"
-                else:
-                    response += f"Parcel Status: {parcel_status_en}\n"
-                    response += f"Estimated Delivery Date to the Armenian Office: {estimated_delivery}\n"
+                status = parcel_status if lang == "hy" else parcel_status_en
+                response += f"{MESSAGES['parcel_status'][lang]}: {status}\n"
+                response += f"{MESSAGES['estimated_delivery_date_am_office'][lang]}: {estimated_delivery}\n"
 
             if len(y)>0:
                 response += f"\n{y}\n"
@@ -391,17 +350,17 @@ def extract_data(route, row, lang):
             home_delivery_value = get_cell(row, 16)
             try:
                 if int(home_delivery_value) > 0:
-                    home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                    home_delivery = MESSAGES["home_delivery_ordered"][lang]
                 else:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
             except ValueError:
                 try:
                     if home_delivery_value.upper() == "YES":
-                        home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                        home_delivery = MESSAGES["home_delivery_ordered"][lang]
                     else:
-                        home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                        home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
                 except Exception as e:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
 
 
             parcel_status = get_cell(row, 28)
@@ -413,26 +372,16 @@ def extract_data(route, row, lang):
             parcel_status_en = parcel_status_translations[route].get(parcel_status, parcel_status)
 
             # Отображение даты заказа
-            if lang == "hy":
-                response += f"Գործարքի ամսաթիվ: {order_date}\n"
-                response += f"{home_delivery}\n"
-            else:
-                response += f"Order Date: {order_date}\n"
-                response += f"{home_delivery}\n"
+            response += f"{MESSAGES['order_date'][lang]}: {order_date}\n"
+            response += f"{home_delivery}\n"
 
             # Проверка столбца AE
             if ae in ["yes", "true", "1", "✓"]:
-                if lang == "hy":
-                    response += f"Ստացված է հաճախորդի կողմից:\n"
-                else:
-                    response += f"Received by the Customer:\n"
+                response += f"{MESSAGES['received_by_customer'][lang]}:\n"
             else:
-                if lang == "hy":
-                    response += f"Առաքման կարգավիճակ: {parcel_status}\n"
-                    response += f"Ժամանման նախատեսվող ամսաթիվ դեպի Երևանյան գրասենյակ: {estimated_delivery}\n"
-                else:
-                    response += f"Parcel Status: {parcel_status_en}\n"
-                    response += f"Estimated Delivery Date to the Armenian Office: {estimated_delivery}\n"
+                status = parcel_status if lang == "hy" else parcel_status_en
+                response += f"{MESSAGES['parcel_status'][lang]}: {status}\n"
+                response += f"{MESSAGES['estimated_delivery_date_am_office'][lang]}: {estimated_delivery}\n"
             
             if len(ag)>0:
                 response += f"\n{ag}\n"
