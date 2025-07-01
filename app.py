@@ -65,30 +65,35 @@ CREATE TABLE IF NOT EXISTS users (
 # );
 # """)
 
-def save_user_db(user, phone=None):
+def save_user_db(user, phone=None, language=None):
     """
     Сохраняет или обновляет запись о пользователе.
     Если запись уже есть — обновляет username/имя/фамилию/телефон и last_seen_at.
     """
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO users (
-            user_id, username, first_name, last_name, phone_number, last_seen_at
+            user_id, username, first_name, last_name, phone_number, language, last_seen_at
         ) VALUES (
-            %s, %s, %s, %s, %s, NOW()
+            %s, %s, %s, %s, %s, COALESCE(%s, 'hy'), NOW()
         )
         ON CONFLICT (user_id) DO UPDATE SET
             username     = EXCLUDED.username,
             first_name   = EXCLUDED.first_name,
             last_name    = EXCLUDED.last_name,
             phone_number = COALESCE(EXCLUDED.phone_number, users.phone_number),
+            language     = COALESCE(EXCLUDED.language, users.language),
             last_seen_at = NOW();
-    """, (
-        user.id,
-        user.username,
-        user.first_name,
-        user.last_name,
-        phone
-    ))
+        """,
+        (
+            user.id,
+            user.username,
+            user.first_name,
+            user.last_name,
+            phone,
+            language,
+        ),
+    )
     conn.commit()
 
 # Настройка логирования
@@ -173,6 +178,7 @@ async def handle_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = query.from_user.id
     lang = "hy" if query.data == "set_lang_hy" else "en"
     user_languages[user_id] = lang
+    save_user_db(query.from_user, language=lang)
     await query.message.reply_text(MESSAGES["language_set"][lang])
 
 # Функция обработки команды /start
@@ -180,8 +186,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     # Сохраняем пользователя (номер ещё неизвестен — передаём None)
     save_user_db(user)
-    # user = update.message.from_user.id
-    lang = user_languages.get(user.id, "hy")
+    cur.execute("SELECT language FROM users WHERE user_id=%s", (user.id,))
+    row = cur.fetchone()
+    lang = row[0] if row else "hy"
+    user_languages[user.id] = lang
     
     # Сохранение пользователя
     
@@ -427,9 +435,9 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text(MESSAGES["specify_broadcast_text"]["hy"], parse_mode='HTML')
         return
 
-    broadcast_text = ' '.join(context.args)
-
-    parts = [p.strip() for p in broadcast_text.split('|')]
+    parts = []
+    for arg in context.args:
+        parts.extend([p.strip() for p in arg.split('|') if p.strip()])
     messages_by_lang = {}
     image_url = None
     percent = None
@@ -473,21 +481,25 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text(MESSAGES["broadcast_invalid_percent"]["hy"], parse_mode='HTML')
         return
 
-    cur.execute("SELECT user_id FROM users")
-    all_users = [row[0] for row in cur.fetchall()]
+    cur.execute("SELECT user_id, language FROM users ORDER BY last_seen_at DESC")
+    rows = cur.fetchall()
+    all_users = [r[0] for r in rows]
+    db_langs = {r[0]: r[1] for r in rows}
+    user_languages.update(db_langs)
 
     if ids:
-        recipients = [uid for uid in all_users if uid in ids]
-        if not recipients:
+        recipients_ordered = [uid for uid in all_users if uid in ids]
+        if not recipients_ordered:
             await update.message.reply_text(MESSAGES["broadcast_invalid_ids"]["hy"], parse_mode='HTML')
             return
     else:
-        recipients = all_users
+        recipients_ordered = all_users
 
     if percent is not None:
-        import random
-        k = max(1, int(len(recipients) * percent / 100))
-        recipients = random.sample(recipients, k)
+        k = max(1, int(len(recipients_ordered) * percent / 100))
+        recipients = recipients_ordered[:k]
+    else:
+        recipients = recipients_ordered
 
     await broadcast_message(context.application, messages_by_lang, recipients, image_url=image_url)
 
