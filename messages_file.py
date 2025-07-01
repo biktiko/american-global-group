@@ -121,6 +121,14 @@ MESSAGES = {
         "hy": "Рассылка выполнена.",
         "en": "Рассылка выполнена."
     },
+    "broadcast_invalid_percent": {
+        "hy": "Неверный процент. Укажите число от 1 до 100.",
+        "en": "Invalid percent value. Specify a number from 1 to 100."
+    },
+    "broadcast_invalid_ids": {
+        "hy": "Неверный список ID пользователей.",
+        "en": "Invalid user ID list."
+    },
     "order_date": {
         "hy": "Գործարքի ամսաթիվ",
         "en": "Order Date"
