@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import psycopg2
 from urllib.parse import urlparse
 from messages_file import MESSAGES
+import queries
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()
@@ -43,40 +44,14 @@ conn.autocommit = True
 cur = conn.cursor()
 
 # 4) Создать нужные таблицы, если их нет
-cur.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id      BIGINT      PRIMARY KEY,
-    username     TEXT,
-    first_name   TEXT,
-    last_name    TEXT,
-    phone_number VARCHAR(20),
-    language     VARCHAR(2)  NOT NULL DEFAULT 'hy',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-""")
+cur.execute(queries.CREATE_USERS_TABLE)
 
 # Таблица для логирования действий пользователей
-cur.execute("""
-CREATE TABLE IF NOT EXISTS logs (
-    log_id     BIGSERIAL PRIMARY KEY,
-    user_id    BIGINT REFERENCES users(user_id) ON DELETE SET NULL,
-    action     TEXT NOT NULL,
-    details    TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-""")
+cur.execute(queries.CREATE_LOGS_TABLE)
 
 # Таблица для сохранения всех рассылок
-cur.execute("""
-CREATE TABLE IF NOT EXISTS broadcasts (
-    broadcast_id BIGSERIAL PRIMARY KEY,
-    admin_id     BIGINT NOT NULL,
-    message_hy   TEXT,
-    message_en   TEXT,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-""")
+cur.execute(queries.CREATE_BROADCASTS_TABLE)
+cur.execute(queries.CREATE_ADMINS_TABLE)
 
 def save_user_db(user, phone=None, language=None):
     """
@@ -84,20 +59,7 @@ def save_user_db(user, phone=None, language=None):
     Если запись уже есть — обновляет username/имя/фамилию/телефон и last_seen_at.
     """
     cur.execute(
-        """
-        INSERT INTO users (
-            user_id, username, first_name, last_name, phone_number, language, last_seen_at
-        ) VALUES (
-            %s, %s, %s, %s, %s, COALESCE(%s, 'hy'), NOW()
-        )
-        ON CONFLICT (user_id) DO UPDATE SET
-            username     = EXCLUDED.username,
-            first_name   = EXCLUDED.first_name,
-            last_name    = EXCLUDED.last_name,
-            phone_number = COALESCE(EXCLUDED.phone_number, users.phone_number),
-            language     = COALESCE(EXCLUDED.language, users.language),
-            last_seen_at = NOW();
-        """,
+        queries.INSERT_USER,
         (
             user.id,
             user.username,
@@ -113,7 +75,7 @@ def save_user_db(user, phone=None, language=None):
 def log_action(user_id, action, details=None):
     try:
         cur.execute(
-            "INSERT INTO logs (user_id, action, details) VALUES (%s, %s, %s)",
+            queries.INSERT_LOG,
             (user_id, action, details),
         )
         conn.commit()
@@ -123,14 +85,14 @@ def log_action(user_id, action, details=None):
 
 
 # Функция для сохранения информации о рассылке
-def save_broadcast(admin_id, message_hy=None, message_en=None):
+def save_broadcast(admin_id, recipients, message_hy=None, message_en=None):
     try:
         cur.execute(
-            "INSERT INTO broadcasts (admin_id, message_hy, message_en) VALUES (%s, %s, %s)",
-            (admin_id, message_hy, message_en),
+            queries.INSERT_BROADCAST,
+            (admin_id, message_hy, message_en, recipients),
         )
         conn.commit()
-        logger.info(f"Broadcast by {admin_id}: hy='{message_hy}' en='{message_en}'")
+        logger.info(f"Broadcast by {admin_id}: hy='{message_hy}' en='{message_en}' to {recipients}")
     except Exception as e:
         logger.error(f"Failed to save broadcast by {admin_id}: {e}")
 
@@ -466,8 +428,8 @@ async def broadcast_message(application, messages_by_lang, user_ids, image_url=N
 
 # Обработчик команды /broadcast (должен быть доступен только администраторам)
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Список администраторов (обновите с вашими реальными ID)
-    admin_ids = [1915281004, 856633845]  
+    cur.execute("SELECT admin_id FROM admins")
+    admin_ids = [r[0] for r in cur.fetchall()]
     user_id = update.message.from_user.id
 
     if user_id not in admin_ids:
@@ -544,8 +506,8 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         recipients = recipients_ordered
 
-    save_broadcast(user_id, messages_by_lang.get('hy'), messages_by_lang.get('en'))
-    log_action(user_id, 'broadcast', str(messages_by_lang))
+    save_broadcast(user_id, recipients, messages_by_lang.get('hy'), messages_by_lang.get('en'))
+    log_action(user_id, 'broadcast', f"{messages_by_lang} -> {recipients}")
 
     await broadcast_message(context.application, messages_by_lang, recipients, image_url=image_url)
 
