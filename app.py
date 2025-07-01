@@ -13,7 +13,6 @@ import asyncio
 import logging
 import os
 from dotenv import load_dotenv
-import sqlite3
 import psycopg2
 from urllib.parse import urlparse
 from messages_file import MESSAGES
@@ -157,16 +156,6 @@ def get_contact_info():
         "📞 USA: +1 424 333-4444\n"
     )
     return contact_text
-
-# Инициализация базы данных
-conn = sqlite3.connect('users.db')
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)''')
-conn.commit()
-
-def add_user(user_id):
-    c.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
-    conn.commit()
 
 # Установка языка
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -411,18 +400,18 @@ def extract_data(route, row, lang):
 
     return response, social_keyboard
 
-# Функция для отправки сообщений всем пользователям (Broadcast)
-async def broadcast_message(application, message_text, image_url=None):
-    c.execute("SELECT user_id FROM users")
-    users = c.fetchall()
-    for user in users:
+# Функция для отправки сообщений пользователям
+async def broadcast_message(application, messages_by_lang, user_ids, image_url=None):
+    for uid in user_ids:
+        lang = user_languages.get(uid, "hy")
+        text = messages_by_lang.get(lang) or messages_by_lang.get("hy") or next(iter(messages_by_lang.values()))
         try:
             if image_url:
-                await application.bot.send_photo(chat_id=user[0], photo=image_url, caption=message_text)
+                await application.bot.send_photo(chat_id=uid, photo=image_url, caption=text)
             else:
-                await application.bot.send_message(chat_id=user[0], text=message_text)
+                await application.bot.send_message(chat_id=uid, text=text)
         except Exception as e:
-            logger.error(f"Не удалось отправить сообщение пользователю {user[0]}: {e}")
+            logger.error(f"Не удалось отправить сообщение пользователю {uid}: {e}")
 
 # Обработчик команды /broadcast (должен быть доступен только администраторам)
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -438,29 +427,69 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text(MESSAGES["specify_broadcast_text"]["hy"], parse_mode='HTML')
         return
 
-    # Объединяем все аргументы в одну строку
     broadcast_text = ' '.join(context.args)
-    
-    # Разделяем текст и URL изображения по разделителю '|'
-    if "|" in broadcast_text:
-        message, image_url = broadcast_text.split("|", 1)
-        message = message.strip()
-        image_url = image_url.strip()
-    else:
-        message = broadcast_text
-        image_url = None
 
-    # Отправка сообщений всем пользователям
-    c.execute("SELECT user_id FROM users")
-    users = c.fetchall()
-    for user in users:
-        try:
-            if image_url:
-                await context.application.bot.send_photo(chat_id=user[0], photo=image_url, caption=message)
-            else:
-                await context.application.bot.send_message(chat_id=user[0], text=message)
-        except Exception as e:
-            logger.error(f"Не удалось отправить сообщение пользователю {user[0]}: {e}")
+    parts = [p.strip() for p in broadcast_text.split('|')]
+    messages_by_lang = {}
+    image_url = None
+    percent = None
+    ids = []
+    default_message = None
+
+    for part in parts:
+        low = part.lower()
+        if low.startswith('hy:'):
+            messages_by_lang['hy'] = part[3:].strip()
+        elif low.startswith('en:'):
+            messages_by_lang['en'] = part[3:].strip()
+        elif low.endswith('%') and low[:-1].isdigit():
+            try:
+                percent = int(low[:-1])
+            except ValueError:
+                percent = None
+        elif low.rstrip('%').isdigit() and percent is None:
+            percent = int(low.rstrip('%'))
+        elif low.startswith('ids='):
+            try:
+                ids = [int(x) for x in low.split('=',1)[1].split(',') if x.strip()]
+            except ValueError:
+                ids = []
+        elif part.startswith('http://') or part.startswith('https://'):
+            image_url = part
+        else:
+            default_message = part if default_message is None else default_message + ' | ' + part
+
+    if not messages_by_lang:
+        if default_message is None:
+            await update.message.reply_text(MESSAGES["specify_broadcast_text"]["hy"], parse_mode='HTML')
+            return
+        messages_by_lang = {'hy': default_message, 'en': default_message}
+    else:
+        for lang in ('hy', 'en'):
+            if lang not in messages_by_lang and default_message:
+                messages_by_lang[lang] = default_message
+
+    if percent is not None and (percent <= 0 or percent > 100):
+        await update.message.reply_text(MESSAGES["broadcast_invalid_percent"]["hy"], parse_mode='HTML')
+        return
+
+    cur.execute("SELECT user_id FROM users")
+    all_users = [row[0] for row in cur.fetchall()]
+
+    if ids:
+        recipients = [uid for uid in all_users if uid in ids]
+        if not recipients:
+            await update.message.reply_text(MESSAGES["broadcast_invalid_ids"]["hy"], parse_mode='HTML')
+            return
+    else:
+        recipients = all_users
+
+    if percent is not None:
+        import random
+        k = max(1, int(len(recipients) * percent / 100))
+        recipients = random.sample(recipients, k)
+
+    await broadcast_message(context.application, messages_by_lang, recipients, image_url=image_url)
 
     await update.message.reply_text(MESSAGES["broadcast_done"]["hy"], parse_mode='HTML')
 
