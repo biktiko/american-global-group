@@ -55,15 +55,28 @@ CREATE TABLE IF NOT EXISTS users (
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 """)
-# cur.execute("""
-# CREATE TABLE IF NOT EXISTS user_actions (
-#     action_id   BIGSERIAL   PRIMARY KEY,
-#     user_id     BIGINT      NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-#     action_type TEXT        NOT NULL,
-#     action_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-#     payload     JSONB
-# );
-# """)
+
+# Таблица для логирования действий пользователей
+cur.execute("""
+CREATE TABLE IF NOT EXISTS logs (
+    log_id     BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(user_id) ON DELETE SET NULL,
+    action     TEXT NOT NULL,
+    details    TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+""")
+
+# Таблица для сохранения всех рассылок
+cur.execute("""
+CREATE TABLE IF NOT EXISTS broadcasts (
+    broadcast_id BIGSERIAL PRIMARY KEY,
+    admin_id     BIGINT NOT NULL,
+    message_hy   TEXT,
+    message_en   TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+""")
 
 def save_user_db(user, phone=None, language=None):
     """
@@ -96,12 +109,39 @@ def save_user_db(user, phone=None, language=None):
     )
     conn.commit()
 
+# Функция для записи действия пользователя в таблицу logs
+def log_action(user_id, action, details=None):
+    try:
+        cur.execute(
+            "INSERT INTO logs (user_id, action, details) VALUES (%s, %s, %s)",
+            (user_id, action, details),
+        )
+        conn.commit()
+        logger.info(f"User {user_id}: {action} {details if details else ''}")
+    except Exception as e:
+        logger.error(f"Failed to log action '{action}' for user {user_id}: {e}")
+
+
+# Функция для сохранения информации о рассылке
+def save_broadcast(admin_id, message_hy=None, message_en=None):
+    try:
+        cur.execute(
+            "INSERT INTO broadcasts (admin_id, message_hy, message_en) VALUES (%s, %s, %s)",
+            (admin_id, message_hy, message_en),
+        )
+        conn.commit()
+        logger.info(f"Broadcast by {admin_id}: hy='{message_hy}' en='{message_en}'")
+    except Exception as e:
+        logger.error(f"Failed to save broadcast by {admin_id}: {e}")
+
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 import base64
 
@@ -179,6 +219,7 @@ async def handle_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE
     lang = "hy" if query.data == "set_lang_hy" else "en"
     user_languages[user_id] = lang
     save_user_db(query.from_user, language=lang)
+    log_action(user_id, 'set_language', lang)
     await query.message.reply_text(MESSAGES["language_set"][lang])
 
 # Функция обработки команды /start
@@ -186,6 +227,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     # Сохраняем пользователя (номер ещё неизвестен — передаём None)
     save_user_db(user)
+    log_action(user.id, 'start')
     cur.execute("SELECT language FROM users WHERE user_id=%s", (user.id,))
     row = cur.fetchone()
     lang = row[0] if row else "hy"
@@ -213,6 +255,7 @@ async def handle_direction(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user_choices[user_id] = direction
     lang = user_languages.get(user_id, "hy")
     route_message = MESSAGES["where_to_find"].get(direction, {}).get(lang, "Error")
+    log_action(user_id, 'choose_direction', direction)
     
     # Создание кнопки "Where to Find"
     keyboard = [
@@ -228,8 +271,7 @@ async def handle_direction(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif direction == "Ocean USA to AM":
         template_example = "AM00017664US"
 
-    print('direction', direction)
-    print('template example', template_example)
+    logger.info(f"User {user_id} chose direction {direction}")
     # Отправляем одно сообщение с инструкцией и кнопкой
     await query.message.reply_text(
         f"{MESSAGES['enter_waybill'][lang]}{template_example}",
@@ -242,6 +284,7 @@ async def handle_change_direction(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "hy")
+    log_action(user_id, 'change_direction')
 
     # Создание клавиатуры с направлениями
     keyboard = [
@@ -501,6 +544,9 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         recipients = recipients_ordered
 
+    save_broadcast(user_id, messages_by_lang.get('hy'), messages_by_lang.get('en'))
+    log_action(user_id, 'broadcast', str(messages_by_lang))
+
     await broadcast_message(context.application, messages_by_lang, recipients, image_url=image_url)
 
     await update.message.reply_text(MESSAGES["broadcast_done"]["hy"], parse_mode='HTML')
@@ -519,6 +565,7 @@ async def share_contact_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     user_id = update.message.from_user.id
     lang = user_languages.get(user_id, "hy")
+    log_action(user_id, 'share_contact_request')
 
     kb = [
         [ KeyboardButton(MESSAGES['share'][lang], request_contact=True) ]
@@ -539,6 +586,7 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     contact = update.message.contact
     user = update.effective_user
     save_user_db(user, phone=contact.phone_number)
+    log_action(user.id, 'share_contact', contact.phone_number)
     # удаляем custom-клавиатуру и возвращаем commands-menu
     await update.message.reply_text(
         MESSAGES["contact_saved"]["hy"],
@@ -551,6 +599,7 @@ async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.message.from_user.id
     lang = user_languages.get(user_id, "hy")
     direction = user_choices.get(user_id)
+    log_action(user_id, 'enter_waybill', update.message.text.strip())
 
     # Определение клавиатуры для выбора направления
     direction_keyboard = [
@@ -658,6 +707,7 @@ async def handle_where_to_find(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = query.from_user.id
     direction = user_choices.get(user_id)
     lang = user_languages.get(user_id, "hy")
+    log_action(user_id, 'where_to_find')
     if direction:
         message = MESSAGES["where_to_find"].get(direction, {}).get(lang, "Error")
         await query.message.reply_text(message)
