@@ -74,5 +74,108 @@ MESSAGES = {
     "share": {
         "hy": "📲 Կիսվել",
         "en": "📲 Share"
+    },
+    "route_names": {
+        "Air AM to USA": {
+            "hy": "Օդային առաքում Հայաստանից ԱՄՆ",
+            "en": "Air Shipments from Armenia to the USA"
+        },
+        "Air USA to AM": {
+            "hy": "Օդային առաքում ԱՄՆ-ից Հայաստան",
+            "en": "Air Shipments from the USA to Armenia"
+        },
+        "Ocean USA to AM": {
+            "hy": "Ծովային առաքում ԱՄՆ-ից Հայաստան",
+            "en": "Ocean shipments from the USA to Armenia"
+        },
+        "unknown": {
+            "hy": "Հասկանալի ուղղություն չի գտնվել",
+            "en": "Unknown direction"
+        }
+    },
+    "where_to_find_button": {
+        "hy": "📍 Որտե՞ղ փնտրել",
+        "en": "📍 Where to Find"
+    },
+    "change_direction": {
+        "hy": "Փոխել ուղղությունը",
+        "en": "Change a direction"
+    },
+    "selected_direction": {
+        "hy": "Ընտրած ուղղություն՝ ",
+        "en": "Selected direction: "
+    },
+    "contact_saved": {
+        "hy": "Спасибо! Номер сохранён.",
+        "en": "Спасибо! Номер сохранён."
+    },
+    "no_permission": {
+        "hy": "У вас нет прав для использования этой команды.",
+        "en": "У вас нет прав для использования этой команды."
+    },
+    "specify_broadcast_text": {
+        "hy": "Пожалуйста, укажите текст для рассылки. Пример: /broadcast Привет всем!",
+        "en": "Пожалуйста, укажите текст для рассылки. Пример: /broadcast Привет всем!"
+    },
+    "broadcast_done": {
+        "hy": "Рассылка выполнена.",
+        "en": "Рассылка выполнена."
+    },
+    "order_date": {
+        "hy": "Գործարքի ամսաթիվ",
+        "en": "Order Date"
+    },
+    "home_delivery_ordered": {
+        "hy": "Առաքում տուն պատվիրված է",
+        "en": "Home delivery is ordered"
+    },
+    "home_delivery_not_ordered": {
+        "hy": "Առաքում տուն պատվիրված չէ",
+        "en": "Home delivery is not ordered"
+    },
+    "received_by_customer": {
+        "hy": "Ստացված է հաճախորդի կողմից",
+        "en": "Received by the Customer"
+    },
+    "parcel_status": {
+        "hy": "Առաքման կարգավիճակ",
+        "en": "Parcel Status"
+    },
+    "estimated_delivery_date_usa_office": {
+        "hy": "Ժամանման նախատեսվող ամսաթիվ դեպի ԱՄՆ գրասենյակ",
+        "en": "Estimated Delivery Date to the American Office"
+    },
+    "estimated_delivery_date_am_office": {
+        "hy": "Ժամանման նախատեսվող ամսաթիվ դեպի Երևանյան գրասենյակ",
+        "en": "Estimated Delivery Date to the Armenian Office"
+    },
+    "parcel_status_translations": {
+        "Air AM to USA": {
+            "ՀՀ գրասենյակում": "In the Armenian Office",
+            "ՀՀ մաքսային ձևակերպում": "In the Armenian Customs Office",
+            "Ուղարկված ՀՀ-ից": "Sent from Armenia",
+            "ԱՄՆ մաքսային մարմին": "In the American Customs Office",
+            "ԱՄՆ գրասենյակում": "In the American Office"
+        },
+        "Air USA to AM": {
+            "Ուղարկված ԱՄՆ-իցն": "Sent from the USA",
+            "ՀՀ գրասենյակում": "In the Armenian Office",
+            "Կանգնեցված ՀՀ մաքսայինի կողմից": "Held by the Armenian Customs Service",
+            "ՀՀ մաքսային տերմինալ": "In the Armenian Customs Office"
+        },
+        "Ocean USA to AM": {
+            "Ուղարկված ԱՄՆ-ից": "Sent from the USA",
+            "ՀՀ գրասենյակում": "In the Armenian Office",
+            "Կանգնեցված ՀՀ մաքսայինի կողմից": "Held by the Armenian Customs Service",
+            "ՀՀ մաքսային տերմինալ": "In the Armenian Customs Office"
+        }
+    },
+    "languages": {
+        "hy": "Հայերեն",
+        "en": "English"
+    },
+    "unsupported_route": {
+        "hy": "Unsupported route.",
+        "en": "Unsupported route."
     }
 }

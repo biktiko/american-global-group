@@ -171,8 +171,8 @@ def add_user(user_id):
 # Установка языка
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
-        [InlineKeyboardButton("Հայերեն", callback_data="set_lang_hy")],
-        [InlineKeyboardButton("English", callback_data="set_lang_en")]
+        [InlineKeyboardButton(MESSAGES["languages"]["hy"], callback_data="set_lang_hy")],
+        [InlineKeyboardButton(MESSAGES["languages"]["en"], callback_data="set_lang_en")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(MESSAGES["language_prompt"]["hy"], reply_markup=reply_markup)
@@ -192,14 +192,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Сохраняем пользователя (номер ещё неизвестен — передаём None)
     save_user_db(user)
     # user = update.message.from_user.id
-    lang = user_languages.get(user, "hy")
+    lang = user_languages.get(user.id, "hy")
     
     # Сохранение пользователя
     
     keyboard = [
-        [InlineKeyboardButton("Air Shipments from Armenia to the USA" if lang == "en" else "Օդային առաքում Հայաստանից ԱՄՆ", callback_data="Air AM to USA")],
-        [InlineKeyboardButton("Air Shipments from the USA to Armenia" if lang == "en" else "Օդային առաքում ԱՄՆ-ից Հայաստան", callback_data="Air USA to AM")],
-        [InlineKeyboardButton("Ocean shipments from the USA to Armenia" if lang == "en" else "Ծովային առաքում ԱՄՆ-ից Հայաստան", callback_data="Ocean USA to AM")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Air AM to USA"][lang], callback_data="Air AM to USA")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Air USA to AM"][lang], callback_data="Air USA to AM")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Ocean USA to AM"][lang], callback_data="Ocean USA to AM")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
@@ -219,7 +219,7 @@ async def handle_direction(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     
     # Создание кнопки "Where to Find"
     keyboard = [
-        [InlineKeyboardButton("📍 Where to Find" if lang == "en" else "📍 Որտե՞ղ փնտրել", callback_data="where_to_find")]
+        [InlineKeyboardButton(MESSAGES["where_to_find_button"][lang], callback_data="where_to_find")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -248,9 +248,9 @@ async def handle_change_direction(update: Update, context: ContextTypes.DEFAULT_
 
     # Создание клавиатуры с направлениями
     keyboard = [
-        [InlineKeyboardButton("Air Shipments from Armenia to the USA" if lang == "en" else "Օդային առաքում Հայաստանից ԱՄՆ", callback_data="Air AM to USA")],
-        [InlineKeyboardButton("Air Shipments from the USA to Armenia" if lang == "en" else "Օդային առաքում ԱՄՆ-ից Հայաստան", callback_data="Air USA to AM")],
-        [InlineKeyboardButton("Ocean shipments from the USA to Armenia" if lang == "en" else "Ծովային առաքում ԱՄՆ-ից Հայաստան", callback_data="Ocean USA to AM")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Air AM to USA"][lang], callback_data="Air AM to USA")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Air USA to AM"][lang], callback_data="Air USA to AM")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Ocean USA to AM"][lang], callback_data="Ocean USA to AM")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -264,28 +264,7 @@ async def handle_change_direction(update: Update, context: ContextTypes.DEFAULT_
 def extract_data(route, row, lang):
     response = ""
     try:
-        # Определение переводов статусов для каждого маршрута
-        parcel_status_translations = {
-            "Air AM to USA": {
-                "ՀՀ գրասենյակում": "In the Armenian Office",
-                "ՀՀ մաքսային ձևակերպում": "In the Armenian Customs Office",
-                "Ուղարկված ՀՀ-ից": "Sent from Armenia",
-                "ԱՄՆ մաքսային մարմին": "In the American Customs Office",
-                "ԱՄՆ գրասենյակում": "In the American Office"
-            },
-            "Air USA to AM": {
-                "Ուղարկված ԱՄՆ-իցն": "Sent from the USA",
-                "ՀՀ գրասենյակում": "In the Armenian Office",
-                "Կանգնեցված ՀՀ մաքսայինի կողմից": "Held by the Armenian Customs Service",
-                "ՀՀ մաքսային տերմինալ": "In the Armenian Customs Office"
-            },
-            "Ocean USA to AM": {
-                "Ուղարկված ԱՄՆ-ից": "Sent from the USA",
-                "ՀՀ գրասենյակում": "In the Armenian Office",
-                "Կանգնեցված ՀՀ մաքսայինի կողմից": "Held by the Armenian Customs Service",
-                "ՀՀ մաքսային տերմինալ": "In the Armenian Customs Office"
-            }
-        }
+        parcel_status_translations = MESSAGES["parcel_status_translations"]
 
         if route == "Air AM to USA":
             # Column indices (0-based): B=1, C=2, V=21, Z=25, Y=24, AA=26, AB=27
@@ -293,11 +272,11 @@ def extract_data(route, row, lang):
             home_delivery_value = get_cell(row, 21)
             try:
                 if int(home_delivery_value) > 0:
-                    home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                    home_delivery = MESSAGES["home_delivery_ordered"][lang]
                 else:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
             except ValueError:
-                home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"  # По умолчанию
+                home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
 
             parcel_status = get_cell(row, 25)
             estimated_delivery = get_cell(row, 24)
@@ -309,26 +288,16 @@ def extract_data(route, row, lang):
             parcel_status_en = parcel_status_translations[route].get(parcel_status, parcel_status)
 
             # Отображение даты заказа
-            if lang == "hy":
-                response += f"Գործարքի ամսաթիվ: {order_date}\n"
-                response += f"{home_delivery}\n"
-            else:
-                response += f"Order Date: {order_date}\n"
-                response += f"{home_delivery}\n"
+            response += f"{MESSAGES['order_date'][lang]}: {order_date}\n"
+            response += f"{home_delivery}\n"
 
             # Проверка столбца AA
             if aa in ['true', 'yes', '1', '✓']:
-                if lang == "hy":
-                    response += f"Ստացված է հաճախորդի կողմից: {ab}\n" if ab else "Ստացված է հաճախորդի կողմից:\n"
-                else:
-                    response += f"Received by the Customer: {ab}\n" if ab else "Received by the Customer:\n"
+                response += f"{MESSAGES['received_by_customer'][lang]}: {ab}\n" if ab else f"{MESSAGES['received_by_customer'][lang]}:\n"
             else:
-                if lang == "hy":
-                    response += f"Առաքման կարգավիճակ:{parcel_status}\n"
-                    response += f"Ժամանման նախատեսվող ամսաթիվ դեպի ԱՄՆ գրասենյակ: {estimated_delivery}\n"
-                else:
-                    response += f"Parcel Status: {parcel_status_en}\n"
-                    response += f"Estimated Delivery Date to the American Office:{estimated_delivery}\n"
+                status = parcel_status if lang == "hy" else parcel_status_en
+                response += f"{MESSAGES['parcel_status'][lang]}: {status}\n"
+                response += f"{MESSAGES['estimated_delivery_date_usa_office'][lang]}: {estimated_delivery}\n"
             
             if len(ac)>0:
                 response += f"\n{ac}\n"
@@ -339,17 +308,17 @@ def extract_data(route, row, lang):
             home_delivery_value = get_cell(row, 17)
             try:
                 if int(home_delivery_value) > 0:
-                    home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                    home_delivery = MESSAGES["home_delivery_ordered"][lang]
                 else:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
             except ValueError:
                 try:
                     if home_delivery_value.upper() == "YES":
-                        home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                        home_delivery = MESSAGES["home_delivery_ordered"][lang]
                     else:
-                        home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                        home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
                 except Exception as e:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
 
 
             parcel_status = get_cell(row, 21)
@@ -361,26 +330,16 @@ def extract_data(route, row, lang):
             parcel_status_en = parcel_status_translations[route].get(parcel_status, parcel_status)
 
             # Отображение даты заказа
-            if lang == "hy":
-                response += f"Գործարքի ամսաթիվ:{order_date}\n"
-                response += f"{home_delivery}\n"
-            else:
-                response += f"Order Date: {order_date}\n"
-                response += f"{home_delivery}\n"
+            response += f"{MESSAGES['order_date'][lang]}: {order_date}\n"
+            response += f"{home_delivery}\n"
 
             # Проверка столбца X
             if x in ["yes", "true", "1", "✓"]:
-                if lang == "hy":
-                    response += f"Ստացված է հաճախորդի կողմից:\n"
-                else:
-                    response += f"Received by the Customer:\n"
+                response += f"{MESSAGES['received_by_customer'][lang]}:\n"
             else:
-                if lang == "hy":
-                    response += f"Առաքման կարգավիճակ: {parcel_status}\n"
-                    response += f"Ժամանման նախատեսվող ամսաթիվ դեպի Երևանյան գրասենյակ: {estimated_delivery}\n"
-                else:
-                    response += f"Parcel Status: {parcel_status_en}\n"
-                    response += f"Estimated Delivery Date to the Armenian Office: {estimated_delivery}\n"
+                status = parcel_status if lang == "hy" else parcel_status_en
+                response += f"{MESSAGES['parcel_status'][lang]}: {status}\n"
+                response += f"{MESSAGES['estimated_delivery_date_am_office'][lang]}: {estimated_delivery}\n"
 
             if len(y)>0:
                 response += f"\n{y}\n"
@@ -391,17 +350,17 @@ def extract_data(route, row, lang):
             home_delivery_value = get_cell(row, 16)
             try:
                 if int(home_delivery_value) > 0:
-                    home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                    home_delivery = MESSAGES["home_delivery_ordered"][lang]
                 else:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
             except ValueError:
                 try:
                     if home_delivery_value.upper() == "YES":
-                        home_delivery = "Առաքում տուն պատվիրված է" if lang == "hy" else "Home delivery is ordered"
+                        home_delivery = MESSAGES["home_delivery_ordered"][lang]
                     else:
-                        home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                        home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
                 except Exception as e:
-                    home_delivery = "Առաքում տուն պատվիրված չէ" if lang == "hy" else "Home delivery is not ordered"
+                    home_delivery = MESSAGES["home_delivery_not_ordered"][lang]
 
 
             parcel_status = get_cell(row, 28)
@@ -413,32 +372,22 @@ def extract_data(route, row, lang):
             parcel_status_en = parcel_status_translations[route].get(parcel_status, parcel_status)
 
             # Отображение даты заказа
-            if lang == "hy":
-                response += f"Գործարքի ամսաթիվ: {order_date}\n"
-                response += f"{home_delivery}\n"
-            else:
-                response += f"Order Date: {order_date}\n"
-                response += f"{home_delivery}\n"
+            response += f"{MESSAGES['order_date'][lang]}: {order_date}\n"
+            response += f"{home_delivery}\n"
 
             # Проверка столбца AE
             if ae in ["yes", "true", "1", "✓"]:
-                if lang == "hy":
-                    response += f"Ստացված է հաճախորդի կողմից:\n"
-                else:
-                    response += f"Received by the Customer:\n"
+                response += f"{MESSAGES['received_by_customer'][lang]}:\n"
             else:
-                if lang == "hy":
-                    response += f"Առաքման կարգավիճակ: {parcel_status}\n"
-                    response += f"Ժամանման նախատեսվող ամսաթիվ դեպի Երևանյան գրասենյակ: {estimated_delivery}\n"
-                else:
-                    response += f"Parcel Status: {parcel_status_en}\n"
-                    response += f"Estimated Delivery Date to the Armenian Office: {estimated_delivery}\n"
+                status = parcel_status if lang == "hy" else parcel_status_en
+                response += f"{MESSAGES['parcel_status'][lang]}: {status}\n"
+                response += f"{MESSAGES['estimated_delivery_date_am_office'][lang]}: {estimated_delivery}\n"
             
             if len(ag)>0:
                 response += f"\n{ag}\n"
 
         else:
-            response = "Unsupported route."
+            response = MESSAGES["unsupported_route"]["hy"]
             return response, None
         
         # Добавление контактной информации
@@ -482,11 +431,11 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user_id = update.message.from_user.id
 
     if user_id not in admin_ids:
-        await update.message.reply_text("У вас нет прав для использования этой команды.", parse_mode='HTML')
+        await update.message.reply_text(MESSAGES["no_permission"]["hy"], parse_mode='HTML')
         return
 
     if not context.args:
-        await update.message.reply_text("Пожалуйста, укажите текст для рассылки. Пример: /broadcast Привет всем!", parse_mode='HTML')
+        await update.message.reply_text(MESSAGES["specify_broadcast_text"]["hy"], parse_mode='HTML')
         return
 
     # Объединяем все аргументы в одну строку
@@ -513,7 +462,7 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         except Exception as e:
             logger.error(f"Не удалось отправить сообщение пользователю {user[0]}: {e}")
 
-    await update.message.reply_text("Рассылка выполнена.", parse_mode='HTML')
+    await update.message.reply_text(MESSAGES["broadcast_done"]["hy"], parse_mode='HTML')
 
 # Установка команд для меню
 async def set_bot_commands(application):
@@ -551,7 +500,7 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     save_user_db(user, phone=contact.phone_number)
     # удаляем custom-клавиатуру и возвращаем commands-menu
     await update.message.reply_text(
-        "Спасибо! Номер сохранён.",
+        MESSAGES["contact_saved"]["hy"],
         reply_markup=ReplyKeyboardRemove()
     )
 
@@ -564,9 +513,9 @@ async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     # Определение клавиатуры для выбора направления
     direction_keyboard = [
-        [InlineKeyboardButton("Air Shipments from Armenia to the USA" if lang == "en" else "Օդային առաքում Հայաստանից ԱՄՆ", callback_data="Air AM to USA")],
-        [InlineKeyboardButton("Air Shipments from the USA to Armenia" if lang == "en" else "Օդային առաքում ԱՄՆ-ից Հայաստան", callback_data="Air USA to AM")],
-        [InlineKeyboardButton("Ocean shipments from the USA to Armenia" if lang == "en" else "Ծովային առաքում ԱՄՆ-ից Հայաստան", callback_data="Ocean USA to AM")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Air AM to USA"][lang], callback_data="Air AM to USA")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Air USA to AM"][lang], callback_data="Air USA to AM")],
+        [InlineKeyboardButton(MESSAGES["route_names"]["Ocean USA to AM"][lang], callback_data="Ocean USA to AM")],
     ]
     direction_reply_markup = InlineKeyboardMarkup(direction_keyboard)
 
@@ -621,25 +570,21 @@ async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Если waybill не найден
         if not found:
             # Определение отображаемого названия направления
-            if direction == "Air AM to USA":
-                display_name = "Air Shipments from Armenia to the USA" if lang == "en" else "Օդային առաքում Հայաստանից ԱՄՆ"
-            elif direction == "Air USA to AM":
-                display_name = "Air Shipments from the USA to Armenia" if lang == "en" else "Օդային առաքում ԱՄՆ-ից Հայաստան"
-            elif direction == "Ocean USA to AM":
-                display_name = "Ocean shipments from the USA to Armenia" if lang == "en" else "Ծովային առաքում ԱՄՆ-ից Հայաստան"
+            if direction in MESSAGES["route_names"]:
+                display_name = MESSAGES["route_names"][direction][lang]
             else:
-                display_name = "Unknown direction" if lang == "en" else "Հասկանալի ուղղություն չի գտնվել"
+                display_name = MESSAGES["route_names"]["unknown"][lang]
 
             # Создание сообщения с выбранным направлением
             selected_direction_message = (
-                f"{ 'Selected direction: ' if lang == 'en' else 'Ընտրած ուղղություն՝ ' }{display_name}\n\n"
+                f"{MESSAGES['selected_direction'][lang]}{display_name}\n\n"
             )
 
             # Получение сообщения "not_found"
             not_found_message = MESSAGES['not_found'][direction][lang]
 
             # Получение сообщения "choose direction again"
-            choose_direction_message = "Change a direction" if lang == "en" else "Փոխել ուղղությունը"
+            choose_direction_message = MESSAGES["change_direction"][lang]
 
             # Получение контактной информации
             contact_info = get_contact_info()
