@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 import psycopg2
 from urllib.parse import urlparse
 from messages_file import MESSAGES
+import queries
+import re
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()
@@ -43,53 +45,57 @@ conn.autocommit = True
 cur = conn.cursor()
 
 # 4) Создать нужные таблицы, если их нет
-cur.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    user_id      BIGINT      PRIMARY KEY,
-    username     TEXT,
-    first_name   TEXT,
-    last_name    TEXT,
-    phone_number VARCHAR(20),
-    language     VARCHAR(2)  NOT NULL DEFAULT 'hy',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-""")
-# cur.execute("""
-# CREATE TABLE IF NOT EXISTS user_actions (
-#     action_id   BIGSERIAL   PRIMARY KEY,
-#     user_id     BIGINT      NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-#     action_type TEXT        NOT NULL,
-#     action_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-#     payload     JSONB
-# );
-# """)
+cur.execute(queries.CREATE_USERS_TABLE)
 
-def save_user_db(user, phone=None):
+# Таблица для логирования действий пользователей
+cur.execute(queries.CREATE_LOGS_TABLE)
+
+# Таблица для сохранения всех рассылок
+cur.execute(queries.CREATE_BROADCASTS_TABLE)
+cur.execute(queries.CREATE_ADMINS_TABLE)
+
+def save_user_db(user, phone=None, language=None):
     """
     Сохраняет или обновляет запись о пользователе.
     Если запись уже есть — обновляет username/имя/фамилию/телефон и last_seen_at.
     """
-    cur.execute("""
-        INSERT INTO users (
-            user_id, username, first_name, last_name, phone_number, last_seen_at
-        ) VALUES (
-            %s, %s, %s, %s, %s, NOW()
-        )
-        ON CONFLICT (user_id) DO UPDATE SET
-            username     = EXCLUDED.username,
-            first_name   = EXCLUDED.first_name,
-            last_name    = EXCLUDED.last_name,
-            phone_number = COALESCE(EXCLUDED.phone_number, users.phone_number),
-            last_seen_at = NOW();
-    """, (
-        user.id,
-        user.username,
-        user.first_name,
-        user.last_name,
-        phone
-    ))
+    cur.execute(
+        queries.INSERT_USER,
+        (
+            user.id,
+            user.username,
+            user.first_name,
+            user.last_name,
+            phone,
+            language,
+        ),
+    )
     conn.commit()
+
+# Функция для записи действия пользователя в таблицу logs
+def log_action(user_id, action, details=None):
+    try:
+        cur.execute(
+            queries.INSERT_LOG,
+            (user_id, action, details),
+        )
+        conn.commit()
+        logger.info(f"User {user_id}: {action} {details if details else ''}")
+    except Exception as e:
+        logger.error(f"Failed to log action '{action}' for user {user_id}: {e}")
+
+
+# Функция для сохранения информации о рассылке
+def save_broadcast(admin_id, recipients, message_hy=None, message_en=None):
+    try:
+        cur.execute(
+            queries.INSERT_BROADCAST,
+            (admin_id, message_hy, message_en, recipients),
+        )
+        conn.commit()
+        logger.info(f"Broadcast by {admin_id}: hy='{message_hy}' en='{message_en}' to {recipients}")
+    except Exception as e:
+        logger.error(f"Failed to save broadcast by {admin_id}: {e}")
 
 # Настройка логирования
 logging.basicConfig(
@@ -97,6 +103,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 import base64
 
@@ -173,6 +181,8 @@ async def handle_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = query.from_user.id
     lang = "hy" if query.data == "set_lang_hy" else "en"
     user_languages[user_id] = lang
+    save_user_db(query.from_user, language=lang)
+    log_action(user_id, 'set_language', lang)
     await query.message.reply_text(MESSAGES["language_set"][lang])
 
 # Функция обработки команды /start
@@ -180,8 +190,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     # Сохраняем пользователя (номер ещё неизвестен — передаём None)
     save_user_db(user)
-    # user = update.message.from_user.id
-    lang = user_languages.get(user.id, "hy")
+    log_action(user.id, 'start')
+    cur.execute("SELECT language FROM users WHERE user_id=%s", (user.id,))
+    row = cur.fetchone()
+    lang = row[0] if row else "hy"
+    user_languages[user.id] = lang
     
     # Сохранение пользователя
     
@@ -205,6 +218,7 @@ async def handle_direction(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     user_choices[user_id] = direction
     lang = user_languages.get(user_id, "hy")
     route_message = MESSAGES["where_to_find"].get(direction, {}).get(lang, "Error")
+    log_action(user_id, 'choose_direction', direction)
     
     # Создание кнопки "Where to Find"
     keyboard = [
@@ -220,8 +234,7 @@ async def handle_direction(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif direction == "Ocean USA to AM":
         template_example = "AM00017664US"
 
-    print('direction', direction)
-    print('template example', template_example)
+    logger.info(f"User {user_id} chose direction {direction}")
     # Отправляем одно сообщение с инструкцией и кнопкой
     await query.message.reply_text(
         f"{MESSAGES['enter_waybill'][lang]}{template_example}",
@@ -234,6 +247,7 @@ async def handle_change_direction(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
     user_id = query.from_user.id
     lang = user_languages.get(user_id, "hy")
+    log_action(user_id, 'change_direction')
 
     # Создание клавиатуры с направлениями
     keyboard = [
@@ -415,82 +429,110 @@ async def broadcast_message(application, messages_by_lang, user_ids, image_url=N
 
 # Обработчик команды /broadcast (должен быть доступен только администраторам)
 async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Список администраторов (обновите с вашими реальными ID)
-    admin_ids = [1915281004, 856633845]  
     user_id = update.message.from_user.id
-
+    # Проверяем, что пользователь — админ
+    cur.execute("SELECT admin_id FROM admins")
+    admin_ids = [r[0] for r in cur.fetchall()]
     if user_id not in admin_ids:
         await update.message.reply_text(MESSAGES["no_permission"]["hy"], parse_mode='HTML')
         return
 
-    if not context.args:
+    # Получаем полный текст после команды
+    full_text = update.message.text or ""
+    parts = full_text.split(' ', 1)
+    if len(parts) < 2 or not parts[1].strip():
         await update.message.reply_text(MESSAGES["specify_broadcast_text"]["hy"], parse_mode='HTML')
         return
+    args_text = parts[1]
 
-    broadcast_text = ' '.join(context.args)
-
-    parts = [p.strip() for p in broadcast_text.split('|')]
-    messages_by_lang = {}
-    image_url = None
-    percent = None
+    # Извлекаем ids=
     ids = []
+    m_ids = re.search(r'\bids\s*=\s*([\d,]+)', args_text, re.IGNORECASE)
+    if m_ids:
+        ids = [int(x) for x in m_ids.group(1).split(',') if x]
+        args_text = re.sub(r'\bids\s*=\s*[\d,]+', '', args_text, flags=re.IGNORECASE)
+
+    # Извлекаем URL изображения
+    image_url = None
+    m_url = re.search(r'(https?://\S+)', args_text)
+    if m_url:
+        image_url = m_url.group(1)
+        args_text = args_text.replace(image_url, '')
+
+    # Извлекаем процент
+    percent = None
+    m_pct = re.search(r'(\d{1,3})\s*%', args_text)
+    if m_pct:
+        percent = int(m_pct.group(1))
+        args_text = args_text.replace(m_pct.group(0), '')
+
+    # Парсим сообщения по языкам
+    messages_by_lang = {}
+    # hy:
+    m_hy = re.search(r'hy:(.*?)(?=(\|en:|$))', args_text, re.DOTALL | re.IGNORECASE)
+    if m_hy:
+        messages_by_lang['hy'] = m_hy.group(1).strip()
+    # en:
+    m_en = re.search(r'en:(.*?)(?=(\|hy:|$))', args_text, re.DOTALL | re.IGNORECASE)
+    if m_en:
+        messages_by_lang['en'] = m_en.group(1).strip()
+
+    # Любой оставшийся текст принимаем как default_message
     default_message = None
+    leftover = re.sub(r'(hy:.*?)(?=(\|en:|$))', '', args_text, flags=re.DOTALL | re.IGNORECASE)
+    leftover = re.sub(r'(en:.*?)(?=(\|hy:|$))', '', leftover, flags=re.DOTALL | re.IGNORECASE)
+    leftover = leftover.replace('|', '').strip()
+    if leftover:
+        default_message = leftover
 
-    for part in parts:
-        low = part.lower()
-        if low.startswith('hy:'):
-            messages_by_lang['hy'] = part[3:].strip()
-        elif low.startswith('en:'):
-            messages_by_lang['en'] = part[3:].strip()
-        elif low.endswith('%') and low[:-1].isdigit():
-            try:
-                percent = int(low[:-1])
-            except ValueError:
-                percent = None
-        elif low.rstrip('%').isdigit() and percent is None:
-            percent = int(low.rstrip('%'))
-        elif low.startswith('ids='):
-            try:
-                ids = [int(x) for x in low.split('=',1)[1].split(',') if x.strip()]
-            except ValueError:
-                ids = []
-        elif part.startswith('http://') or part.startswith('https://'):
-            image_url = part
-        else:
-            default_message = part if default_message is None else default_message + ' | ' + part
-
+    # Если ни одного языка не задано — используем default для обоих
     if not messages_by_lang:
         if default_message is None:
             await update.message.reply_text(MESSAGES["specify_broadcast_text"]["hy"], parse_mode='HTML')
             return
         messages_by_lang = {'hy': default_message, 'en': default_message}
     else:
+        # Дополняем недостающий язык
         for lang in ('hy', 'en'):
-            if lang not in messages_by_lang and default_message:
-                messages_by_lang[lang] = default_message
+            if lang not in messages_by_lang:
+                messages_by_lang[lang] = default_message or next(iter(messages_by_lang.values()))
 
+    # Проверка валидности процента
     if percent is not None and (percent <= 0 or percent > 100):
         await update.message.reply_text(MESSAGES["broadcast_invalid_percent"]["hy"], parse_mode='HTML')
         return
 
-    cur.execute("SELECT user_id FROM users")
-    all_users = [row[0] for row in cur.fetchall()]
+    # Получаем всех пользователей и их языки
+    cur.execute("SELECT user_id, language FROM users ORDER BY last_seen_at DESC")
+    rows = cur.fetchall()
+    all_users = [r[0] for r in rows]
+    db_langs = {r[0]: r[1] for r in rows}
+    user_languages.update(db_langs)
 
+    # Фильтрация по ids, если указаны
     if ids:
-        recipients = [uid for uid in all_users if uid in ids]
-        if not recipients:
+        recipients_ordered = [uid for uid in all_users if uid in ids]
+        if not recipients_ordered:
             await update.message.reply_text(MESSAGES["broadcast_invalid_ids"]["hy"], parse_mode='HTML')
             return
     else:
-        recipients = all_users
+        recipients_ordered = all_users
 
+    # Фильтрация по проценту
     if percent is not None:
-        import random
-        k = max(1, int(len(recipients) * percent / 100))
-        recipients = random.sample(recipients, k)
+        k = max(1, int(len(recipients_ordered) * percent / 100))
+        recipients = recipients_ordered[:k]
+    else:
+        recipients = recipients_ordered
 
+    # Сохраняем рассылку и логируем
+    save_broadcast(user_id, recipients, messages_by_lang.get('hy'), messages_by_lang.get('en'))
+    log_action(user_id, 'broadcast', f"{messages_by_lang} -> {recipients}")
+
+    # Отправляем
     await broadcast_message(context.application, messages_by_lang, recipients, image_url=image_url)
 
+    # Подтверждаем админу
     await update.message.reply_text(MESSAGES["broadcast_done"]["hy"], parse_mode='HTML')
 
 # Установка команд для меню
@@ -507,6 +549,7 @@ async def share_contact_request(update: Update, context: ContextTypes.DEFAULT_TY
 
     user_id = update.message.from_user.id
     lang = user_languages.get(user_id, "hy")
+    log_action(user_id, 'share_contact_request')
 
     kb = [
         [ KeyboardButton(MESSAGES['share'][lang], request_contact=True) ]
@@ -527,6 +570,7 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     contact = update.message.contact
     user = update.effective_user
     save_user_db(user, phone=contact.phone_number)
+    log_action(user.id, 'share_contact', contact.phone_number)
     # удаляем custom-клавиатуру и возвращаем commands-menu
     await update.message.reply_text(
         MESSAGES["contact_saved"]["hy"],
@@ -539,6 +583,7 @@ async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.message.from_user.id
     lang = user_languages.get(user_id, "hy")
     direction = user_choices.get(user_id)
+    log_action(user_id, 'enter_waybill', update.message.text.strip())
 
     # Определение клавиатуры для выбора направления
     direction_keyboard = [
@@ -646,6 +691,7 @@ async def handle_where_to_find(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = query.from_user.id
     direction = user_choices.get(user_id)
     lang = user_languages.get(user_id, "hy")
+    log_action(user_id, 'where_to_find')
     if direction:
         message = MESSAGES["where_to_find"].get(direction, {}).get(lang, "Error")
         await query.message.reply_text(message)
