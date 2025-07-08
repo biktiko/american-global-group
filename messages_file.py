@@ -106,20 +106,20 @@ MESSAGES = {
         "en": "Selected direction: "
     },
     "contact_saved": {
-        "hy": "Спасибо! Номер сохранён.",
-        "en": "Спасибо! Номер сохранён."
+        "hy": "Հեռախոսահամարը պահպանված է.",
+        "en": "The phone number has been saved."
     },
     "no_permission": {
         "hy": "У вас нет прав для использования этой команды.",
         "en": "У вас нет прав для использования этой команды."
     },
     "specify_broadcast_text": {
-        "hy": "Пожалуйста, укажите текст для рассылки. Пример: /broadcast Привет всем!",
-        "en": "Пожалуйста, укажите текст для рассылки. Пример: /broadcast Привет всем!"
+        "hy": "Խնդրում ենք նշել ուղարկվող հաղորդագրությունը։ Օրինակ՝ /broadcast Բարեւ բոլորին։",
+        "en": "Please specify the text for the broadcast. Example: /broadcast Hello everyone!"
     },
     "broadcast_done": {
-        "hy": "Рассылка выполнена.",
-        "en": "Рассылка выполнена."
+        "hy": "Նամակը ուղարկված է։", 
+        "en": "Broadcast completed."
     },
     "broadcast_invalid_percent": {
         "hy": "Неверный процент. Укажите число от 1 до 100.",
@@ -183,7 +183,7 @@ MESSAGES = {
         "en": "English"
     },
     "unsupported_route": {
-        "hy": "Unsupported route.",
+        "hy": "Չսպասարկվող ուղղություն։",
         "en": "Unsupported route."
     }
 }
