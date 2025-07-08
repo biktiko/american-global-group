@@ -17,13 +17,18 @@ import psycopg2
 from urllib.parse import urlparse
 from messages_file import MESSAGES
 import queries
+import time
 import re
-
-# Загрузка переменных окружения из .env файла
-load_dotenv()
 
 # 1) Загрузка env
 load_dotenv()
+TIMEZONE = os.getenv("TIMEZONE", "UTC")
+os.environ["TZ"] = TIMEZONE
+try:
+    time.tzset()
+except AttributeError:
+    pass
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     logging.error("DATABASE_URL не задан!")
@@ -43,7 +48,7 @@ conn = psycopg2.connect(
 )
 conn.autocommit = True
 cur = conn.cursor()
-
+cur.execute(f"SET TIME ZONE '{TIMEZONE}'")
 # 4) Создать нужные таблицы, если их нет
 cur.execute(queries.CREATE_USERS_TABLE)
 
@@ -188,13 +193,14 @@ async def handle_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE
 # Функция обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    # Сохраняем пользователя (номер ещё неизвестен — передаём None)
-    save_user_db(user)
-    log_action(user.id, 'start')
     cur.execute("SELECT language FROM users WHERE user_id=%s", (user.id,))
     row = cur.fetchone()
     lang = row[0] if row else "hy"
     user_languages[user.id] = lang
+
+    # Сохраняем или обновляем пользователя, не перезаписывая язык
+    save_user_db(user, language=lang)
+    log_action(user.id, 'start')
     
     # Сохранение пользователя
     
@@ -577,6 +583,15 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup=ReplyKeyboardRemove()
     )
 
+async def prompt_phone_if_needed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запрос номера телефона у пользователя, если он не сохранён."""
+    user_id = update.message.from_user.id
+    cur.execute("SELECT phone_number FROM users WHERE user_id=%s", (user_id,))
+    row = cur.fetchone()
+    phone = row[0] if row else None
+    if not phone:
+        await share_contact_request(update, context)
+
 
 # Обработка ввода waybill пользователем
 async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -676,6 +691,9 @@ async def handle_waybill(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 full_message,
                 reply_markup=direction_reply_markup
             )
+
+        # После обработки запроса предлагаем поделиться номером телефона при его отсутствии
+        await prompt_phone_if_needed(update, context)
 
     except Exception as e:
         logger.error(f"Error processing waybill for user {user_id}: {e}")
