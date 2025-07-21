@@ -75,7 +75,7 @@ def save_user_db(user, phone=None, language=None):
             language,
         ),
     )
-    conn.commit()
+    # conn.commit()
 
 # Функция для записи действия пользователя в таблицу logs
 def log_action(user_id, action, details=None):
@@ -84,7 +84,7 @@ def log_action(user_id, action, details=None):
             queries.INSERT_LOG,
             (user_id, action, details),
         )
-        conn.commit()
+        # conn.commit()
         logger.info(f"User {user_id}: {action} {details if details else ''}")
     except Exception as e:
         logger.error(f"Failed to log action '{action}' for user {user_id}: {e}")
@@ -97,7 +97,7 @@ def save_broadcast(admin_id, recipients, message_hy=None, message_en=None):
             queries.INSERT_BROADCAST,
             (admin_id, message_hy, message_en, recipients),
         )
-        conn.commit()
+        # conn.commit()
         logger.info(f"Broadcast by {admin_id}: hy='{message_hy}' en='{message_en}' to {recipients}")
     except Exception as e:
         logger.error(f"Failed to save broadcast by {admin_id}: {e}")
@@ -193,8 +193,15 @@ async def handle_set_language(update: Update, context: ContextTypes.DEFAULT_TYPE
 # Функция обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    cur.execute("SELECT language FROM users WHERE user_id=%s", (user.id,))
-    row = cur.fetchone()
+
+    # создаём курсор локально
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT language FROM users WHERE user_id=%s",
+            (user.id,),
+        )
+        row = cur.fetchone()
+
     lang = row[0] if row else "hy"
     user_languages[user.id] = lang
 
@@ -718,12 +725,17 @@ async def handle_where_to_find(update: Update, context: ContextTypes.DEFAULT_TYP
             MESSAGES["select_waybill_first"][lang]
         )
 
+async def global_error_handler(update, context):
+    logger.exception("Caught exception:", exc_info=context.error)
+
+
 # Запуск бота с настройкой команд
 if __name__ == "__main__":
     # Создаём приложение
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     # Установка обработчиков
+    application.add_error_handler(global_error_handler)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("setlanguage", set_language))
     application.add_handler(CommandHandler("sharecontact", share_contact_request))
